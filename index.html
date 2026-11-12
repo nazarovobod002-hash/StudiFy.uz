@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Studify.uz - Talabalar Statistikasi va Baholash Tizimi</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="bg-slate-100 min-h-screen p-4 sm:p-6">
+
+    <div class="max-w-4xl mx-auto bg-white rounded-2xl shadow-lg p-6 sm:p-8">
+        <header class="text-center mb-8">
+            <h1 class="text-2xl sm:text-3xl font-bold text-slate-800">Studify.uz - Talabalar Imtihon Statistikasi</h1>
+            <p class="text-slate-500 text-sm mt-1">HEMIS mezonlari asosida ball va baholarni hisoblash tizimi (90-5, 70-4, 60-3)</p>
+        </header>
+
+        <!-- Ma'lumot kiritish formasi -->
+        <form id="studentForm" class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6 bg-slate-50 p-4 rounded-xl border border-slate-200">
+            <div>
+                <label class="block text-xs font-semibold text-slate-600 mb-1">TALABA F.I.SH</label>
+                <input type="text" id="name" required placeholder="Masalan: Anvarov Alisher" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+            </div>
+            <div>
+                <label class="block text-xs font-semibold text-slate-600 mb-1">FAN NOMI</label>
+                <input type="text" id="subject" required placeholder="Masalan: Oliy matematika" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+            </div>
+            <div>
+                <label class="block text-xs font-semibold text-slate-600 mb-1">TO'PLAGAN BALL (0-100)</label>
+                <input type="number" id="score" min="0" max="100" step="0.1" required placeholder="Masalan: 85" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+            </div>
+            <div class="sm:col-span-3 flex gap-3">
+                <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-medium px-6 py-2.5 rounded-lg transition duration-200 flex-1">
+                    Saqlash va Hisoblash
+                </button>
+                <button type="button" onclick="clearData()" class="bg-red-100 hover:bg-red-200 text-red-700 font-medium px-4 py-2.5 rounded-lg transition duration-200">
+                    Barchasini tozalash
+                </button>
+            </div>
+        </form>
+
+        <!-- Statistika kartochkalari -->
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
+            <div class="bg-blue-50 p-4 rounded-xl border border-blue-100 text-center">
+                <p class="text-xs text-blue-600 font-semibold">Jami talabalar</p>
+                <p id="totalCount" class="text-2xl font-bold text-blue-800">0</p>
+            </div>
+            <div class="bg-green-50 p-4 rounded-xl border border-green-100 text-center">
+                <p class="text-xs text-green-600 font-semibold">O'tganlar</p>
+                <p id="passedCount" class="text-2xl font-bold text-green-800">0</p>
+            </div>
+            <div class="bg-red-50 p-4 rounded-xl border border-red-100 text-center">
+                <p class="text-xs text-red-600 font-semibold">O'tmaganlar</p>
+                <p id="failedCount" class="text-2xl font-bold text-red-800">0</p>
+            </div>
+            <div class="bg-amber-50 p-4 rounded-xl border border-amber-100 text-center">
+                <p class="text-xs text-amber-600 font-semibold">O'rtacha ball</p>
+                <p id="avgScore" class="text-2xl font-bold text-amber-800">0</p>
+            </div>
+        </div>
+
+        <!-- Grafiklar -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-8">
+            <div class="bg-white p-4 rounded-xl border border-slate-200 flex justify-center items-center">
+                <div class="w-64 h-64">
+                    <canvas id="pieChart"></canvas>
+                </div>
+            </div>
+            <div class="bg-white p-4 rounded-xl border border-slate-200 flex justify-center items-center">
+                <div class="w-full h-64">
+                    <canvas id="barChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Jadval -->
+        <div class="overflow-x-auto rounded-xl border border-slate-200 mb-6">
+            <table class="w-full text-left border-collapse">
+                <thead>
+                    <tr class="bg-slate-100 text-slate-700 text-xs uppercase tracking-wider">
+                        <th class="p-3">Talaba F.I.SH</th>
+                        <th class="p-3">Fan</th>
+                        <th class="p-3">Ball</th>
+                        <th class="p-3">Baho</th>
+                        <th class="p-3">Holat</th>
+                        <th class="p-3 text-center">Amal</th>
+                    </tr>
+                </thead>
+                <tbody id="studentTableBody" class="divide-y divide-slate-200 text-sm">
+                    <!-- Dinamik qo'shiladi -->
+                </tbody>
+            </table>
+        </div>
+
+        <div class="flex justify-end">
+            <button onclick="exportToCSV()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-medium px-5 py-2.5 rounded-lg transition duration-200">
+                Excel (CSV) formatida yuklab olish
+            </button>
+        </div>
+    </div>
+
+    <script>
+        let students = JSON.parse(localStorage.getItem('students')) || [];
+        let pieChartInstance = null;
+        let barChartInstance = null;
+
+        const form = document.getElementById('studentForm');
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            const name = document.getElementById('name').value.trim();
+            const subject = document.getElementById('subject').value.trim();
+            const score = parseFloat(document.getElementById('score').value);
+
+            let grade = "";
+            if (score >= 90) grade = "5 (A'lo)";
+            else if (score >= 70) grade = "4 (Yaxshi)";
+            else if (score >= 60) grade = "3 (Qoniqarli)";
+            else grade = "2 (Qoniqarsiz)";
+
+            let status = score >= 60 ? "O'tdi" : "O'tmadi";
+
+            students.push({ name, subject, score, grade, status });
+            localStorage.setItem('students', JSON.stringify(students));
+            
+            form.reset();
+            updateUI();
+        });
+
+        function deleteStudent(index) {
+            students.splice(index, 1);
+            localStorage.setItem('students', JSON.stringify(students));
+            updateUI();
+        }
+
+        function clearData() {
+            if (confirm("Barcha ma'lumotlarni o'chirmoqchimisiz?")) {
+                students = [];
+                localStorage.removeItem('students');
+                updateUI();
+            }
+        }
+
+        function updateUI() {
+            const tbody = document.getElementById('studentTableBody');
+            tbody.innerHTML = '';
+
+            let total = students.length;
+            let passed = students.filter(s => s.status === "O'tdi").length;
+            let failed = total - passed;
+            let sumScore = students.reduce((acc, s) => acc + s.score, 0);
+            let avg = total > 0 ? (sumScore / total).toFixed(1) : 0;
+
+            document.getElementById('totalCount').innerText = total;
+            document.getElementById('passedCount').innerText = passed;
+            document.getElementById('failedCount').innerText = failed;
+            document.getElementById('avgScore').innerText = avg;
+
+            students.forEach((s, index) => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td class="p-3 font-medium text-slate-800">${s.name}</td>
+                    <td class="p-3 text-slate-600">${s.subject}</td>
+                    <td class="p-3 font-semibold text-slate-800">${s.score}</td>
+                    <td class="p-3 text-slate-700">${s.grade}</td>
+                    <td class="p-3">
+                        <span class="px-2.5 py-1 rounded-full text-xs font-semibold ${s.status === "O'tdi" ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}">
+                            ${s.status}
+                        </span>
+                    </td>
+                    <td class="p-3 text-center">
+                        <button onclick="deleteStudent(${index})" class="text-red-500 hover:text-red-700 font-bold">O'chirish</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            updateCharts(passed, failed);
+        }
+
+        function updateCharts(passed, failed) {
+            // Pie Chart
+            const ctxPie = document.getElementById('pieChart').getContext('2d');
+            if (pieChartInstance) pieChartInstance.destroy();
+            pieChartInstance = new Chart(ctxPie, {
+                type: 'pie',
+                data: {
+                    labels: ["O'tdi", "O'tmadi"],
+                    datasets: [{
+                        data: [passed, failed],
+                        backgroundColor: ['#22c55e', '#ef4444']
+                    }]
+                },
+                options: { responsive: true, maintainAspectRatio: false }
+            });
+
+            // Bar Chart (Grades count)
+            const gradesCount = { "5 (A'lo)": 0, "4 (Yaxshi)": 0, "3 (Qoniqarli)": 0, "2 (Qoniqarsiz)": 0 };
+            students.forEach(s => { if(gradesCount[s.grade] !== undefined) gradesCount[s.grade]++; });
+
+            const ctxBar = document.getElementById('barChart').getContext('2d');
+            if (barChartInstance) barChartInstance.destroy();
+            barChartInstance = new Chart(ctxBar, {
+                type: 'bar',
+                data: {
+                    labels: Object.keys(gradesCount),
+                    datasets: [{
+                        label: 'Talabalar soni',
+                        data: Object.values(gradesCount),
+                        backgroundColor: '#3b82f6'
+                    }]
+                },
+                options: { responsive: true, maintainAspectRatio: false, scales: { y: { ticks: { precision: 0 } } } }
+            });
+        }
+
+        function exportToCSV() {
+            let csvContent = "Talaba,Fan,Ball,Baho,Holat\n";
+            students.forEach(s => {
+                csvContent += `"${s.name}","${s.subject}",${s.score},"${s.grade}","${s.status}"\n`;
+            });
+            const blob = new Blob(["\ufeff" + csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'imtihon_statistikasi.csv';
+            a.click();
+        }
+
+        updateUI();
+    </script>
+</body>
+</html>
